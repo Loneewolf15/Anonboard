@@ -191,9 +191,12 @@ export default function Dashboard({ user }: { user: User }) {
       if (!docSnap.exists()) {
         try {
           const docRef = doc(db, 'users', user.uid);
+          // Extract the username from the synthesized email (username@anonboard.local)
+          const usernameFromEmail = user.email?.replace('@anonboard.local', '') || '';
           const newProfile = {
             uid: user.uid,
-            displayName: user.displayName || 'Anonymous User',
+            displayName: usernameFromEmail || 'Anonymous User',
+            ...(usernameFromEmail && { username: usernameFromEmail }),
             createdAt: serverTimestamp(),
           };
           await setDoc(docRef, newProfile);

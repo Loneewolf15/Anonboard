@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs, limit } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, auth, storage } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { Ghost, ArrowRight, Check, X, ImageIcon, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
+import cloudinaryConfig from '../../cloudinary-config.json';
+
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || cloudinaryConfig.cloudName}/image/upload`;
+const CLOUDINARY_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || cloudinaryConfig.uploadPreset;
 
 export default function SendMessage() {
   const { username } = useParams(); // Now this acts as either username OR uid in fallback mode
@@ -70,14 +72,18 @@ export default function SendMessage() {
       let imageUrls: string[] = [];
       if (images.length > 0) {
         setUploadProgress('Uploading images...');
-        await signInAnonymously(auth); // Ensure anonymous session for Storage write access
         
         for (let i = 0; i < images.length; i++) {
           const file = images[i];
-          const fileRef = ref(storage, `messages/${recipient.uid}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`);
-          await uploadBytes(fileRef, file);
-          const url = await getDownloadURL(fileRef);
-          imageUrls.push(url);
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('upload_preset', CLOUDINARY_PRESET);
+          formData.append('folder', `anonboard/${recipient.uid}`);
+          
+          const res = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
+          if (!res.ok) throw new Error(`Image upload failed (${res.status})`);
+          const data = await res.json();
+          imageUrls.push(data.secure_url);
         }
       }
 
