@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, collection, query, onSnapshot, orderBy, serverTimestamp, Timestamp, deleteDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { UserProfile, Message } from '../types';
 import { Ghost, ExternalLink, Copy, Check, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -182,11 +182,10 @@ export default function Dashboard({ user }: { user: User }) {
         const docSnap = await getDoc(docRef);
         
         if (!docSnap.exists()) {
+          // Send ABSOLUTE bare minimum fields required by database rules
           const newProfile = {
             uid: user.uid,
             displayName: user.displayName || 'Anonymous User',
-            username: user.uid.slice(0, 8), // Default generic username
-            watermark: '',
             createdAt: serverTimestamp(),
           };
           await setDoc(docRef, newProfile);
@@ -196,7 +195,12 @@ export default function Dashboard({ user }: { user: User }) {
         }
       } catch (err: any) {
         console.error("Profile initialization failed:", err);
-        alert("Database Error: " + err.message + "\n\nTip: The database rules might still be propagating globally. Try refreshing in 60 seconds.");
+        if (err.message.toLowerCase().includes('permission')) {
+            alert("Database Permission Error. Your anonymous session might be invalid or corrupt. We are refreshing your session.");
+            auth.signOut();
+        } else {
+            alert("Database Error: " + err.message);
+        }
       }
     };
     
