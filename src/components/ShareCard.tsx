@@ -12,7 +12,7 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [copied, setCopied] = React.useState(false);
 
-  const generateCanvas = () => {
+  const generateCanvas = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -88,10 +88,45 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
       ctx.fillText(l.trim(), 40, 120 + i * 42);
     });
 
+    const textEndY = 120 + lines.length * 42;
+
+    // Draw actual attached images in a grid on the canvas
     if (message.imageUrls && message.imageUrls.length > 0) {
-      ctx.fillStyle = '#00FF88';
-      ctx.font = '900 16px sans-serif';
-      ctx.fillText(`📎 ${message.imageUrls.length} ATTACHED ${message.imageUrls.length === 1 ? 'IMAGE' : 'IMAGES'}`, 40, 140 + lines.length * 42);
+      const urls = message.imageUrls.slice(0, 3);
+      const count = urls.length;
+      const imageAreaY = textEndY + 20;
+      const padding = 8;
+      const totalWidth = w - 80; // 40px left + 40px right margin
+      const imgW = count === 1 ? totalWidth : count === 2 ? (totalWidth - padding) / 2 : (totalWidth - padding * 2) / 3;
+      const imgH = imgW; // square thumbnails
+
+      // Load all images first, then draw
+      const loadedImages = await Promise.all(
+        urls.map((url) => new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = url;
+        }))
+      );
+
+      loadedImages.forEach((img, i) => {
+        const xPos = 40 + i * (imgW + padding);
+        // clip to rounded rect
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(xPos, imageAreaY, imgW, imgH, 8);
+        ctx.clip();
+
+        // cover-fit the image
+        const aspect = img.naturalWidth / img.naturalHeight;
+        let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
+        if (aspect > 1) { sw = img.naturalHeight; sx = (img.naturalWidth - sw) / 2; }
+        else { sh = img.naturalWidth; sy = (img.naturalHeight - sh) / 2; }
+        ctx.drawImage(img, sx, sy, sw, sh, xPos, imageAreaY, imgW, imgH);
+        ctx.restore();
+      });
     }
 
     // Reaction Counts
@@ -133,7 +168,7 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
   };
 
   useEffect(() => {
-    generateCanvas();
+    generateCanvas().catch(console.error);
   }, [message, profile]);
 
   const handleDownload = () => {
