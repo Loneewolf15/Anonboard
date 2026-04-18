@@ -88,6 +88,12 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
       ctx.fillText(l.trim(), 40, 120 + i * 42);
     });
 
+    if (message.imageUrls && message.imageUrls.length > 0) {
+      ctx.fillStyle = '#00FF88';
+      ctx.font = '900 16px sans-serif';
+      ctx.fillText(`📎 ${message.imageUrls.length} ATTACHED ${message.imageUrls.length === 1 ? 'IMAGE' : 'IMAGES'}`, 40, 140 + lines.length * 42);
+    }
+
     // Reaction Counts
     const reactions = Object.entries(message.reactions || {});
     if (reactions.length > 0) {

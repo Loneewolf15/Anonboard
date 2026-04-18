@@ -35,6 +35,16 @@ const MessageCard: React.FC<MessageCardProps> = ({ message, onShare, onDelete })
         {message.content}
       </p>
 
+      {message.imageUrls && message.imageUrls.length > 0 && (
+        <div className={`grid gap-2 mb-8 ${message.imageUrls.length === 1 ? 'grid-cols-1' : message.imageUrls.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          {message.imageUrls.map((url, i) => (
+            <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-bg border border-grid-line">
+              <img src={url} alt="Attached drop" className="w-full h-full object-cover transition-transform hover:scale-105" />
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mt-auto pt-6 border-t border-grid-line">
         <button 
           onClick={() => onShare(message)}

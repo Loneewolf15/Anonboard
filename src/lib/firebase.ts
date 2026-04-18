@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 // Default config from building time (AI Studio)
 import defaultFirebaseConfig from '../../firebase-applet-config.json';
@@ -19,6 +20,7 @@ const firestoreDatabaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || default
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firestoreDatabaseId);
+export const storage = getStorage(app);
 
 export const signInAndCreateBoard = () => signInAnonymously(auth);
 

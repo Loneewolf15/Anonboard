@@ -19,6 +19,7 @@ export interface Message {
   reactions: Record<string, number>;
   createdAt: Timestamp;
   recipientUid: string;
+  imageUrls?: string[];
 }
 
 export interface FirestoreErrorInfo {

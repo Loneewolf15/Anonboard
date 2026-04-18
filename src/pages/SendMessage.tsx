@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { signInAnonymously } from 'firebase/auth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth, storage } from '../lib/firebase';
 import { UserProfile } from '../types';
-import { Ghost, ArrowRight, Check, X } from 'lucide-react';
+import { Ghost, ArrowRight, Check, X, ImageIcon, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 
@@ -15,6 +17,8 @@ export default function SendMessage() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [images, setImages] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState('');
 
   const categories = [
     { id: 'general', label: 'General', emoji: '👻' },
@@ -63,10 +67,26 @@ export default function SendMessage() {
     if (!content.trim() || !recipient) return;
     setLoading(true);
     try {
+      let imageUrls: string[] = [];
+      if (images.length > 0) {
+        setUploadProgress('Uploading images...');
+        await signInAnonymously(auth); // Ensure anonymous session for Storage write access
+        
+        for (let i = 0; i < images.length; i++) {
+          const file = images[i];
+          const fileRef = ref(storage, `messages/${recipient.uid}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`);
+          await uploadBytes(fileRef, file);
+          const url = await getDownloadURL(fileRef);
+          imageUrls.push(url);
+        }
+      }
+
+      setUploadProgress('Encrypting drop...');
       await addDoc(collection(db, 'users', recipient.uid, 'messages'), {
         content: content.trim(),
         recipientUid: recipient.uid,
         category,
+        ...(imageUrls.length > 0 && { imageUrls }),
         createdAt: serverTimestamp(),
         reactions: {},
       });
@@ -79,10 +99,33 @@ export default function SendMessage() {
       });
     } catch (err) {
       console.error(err);
-      setError('Failed to send message.');
+      setError('Failed to send message. Attachments might be too large or the database is rejecting it.');
     } finally {
       setLoading(false);
+      setUploadProgress('');
     }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selected = Array.from(e.target.files);
+      if (images.length + selected.length > 3) {
+        alert("You can only attach a maximum of 3 images.");
+        return;
+      }
+      const validFiles = selected.filter(f => {
+        if (f.size > 5 * 1024 * 1024) {
+          alert(`Image ${f.name} is larger than 5MB.`);
+          return false;
+        }
+        return true;
+      });
+      setImages(prev => [...prev, ...validFiles].slice(0, 3));
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
   };
 
   if (loading && !recipient && !error) {
@@ -168,18 +211,52 @@ export default function SendMessage() {
           </div>
         </div>
 
-        <button 
-          type="submit"
-          disabled={loading || !content.trim()}
-          className="w-full flex items-center justify-center gap-3 py-4 sm:py-6 bg-accent text-black rounded-xl font-black text-lg sm:text-2xl uppercase italic tracking-tighter transition-all active:scale-95 disabled:opacity-50 hover:shadow-[0_0_20px_rgba(0,255,136,0.2)]"
-        >
-          {loading ? 'SENDING...' : (
-            <>
-              DROP ANONYMOUSLY
-              <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
-            </>
-          )}
-        </button>
+        {images.length > 0 && (
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            {images.map((file, i) => (
+              <div key={i} className="relative aspect-square rounded-xl bg-bg border border-grid-line overflow-hidden group/img">
+                <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                <button 
+                  type="button"
+                  onClick={() => removeImage(i)}
+                  className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all backdrop-blur-sm"
+                >
+                  <Trash2 className="w-6 h-6" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-3 sm:gap-4">
+          <label className={`w-16 sm:w-20 shrink-0 flex items-center justify-center border rounded-xl cursor-pointer transition-all ${
+            images.length >= 3 || loading
+              ? 'bg-transparent border-grid-line/50 text-white/10' 
+              : 'bg-surface border-grid-line text-text-dim hover:text-white hover:border-white/20'
+          }`}>
+            <input 
+              type="file" 
+              accept="image/*" 
+              multiple 
+              className="hidden" 
+              onChange={handleImageChange}
+              disabled={images.length >= 3 || loading}
+            />
+            <ImageIcon className="w-6 h-6" />
+          </label>
+          <button 
+            type="submit"
+            disabled={loading || !content.trim()}
+            className="flex-1 flex items-center justify-center gap-3 py-4 sm:py-6 bg-accent text-black rounded-xl font-black text-lg sm:text-2xl uppercase italic tracking-tighter transition-all active:scale-95 disabled:opacity-50 hover:shadow-[0_0_20px_rgba(0,255,136,0.2)]"
+          >
+            {loading ? (uploadProgress || 'SENDING...') : (
+              <>
+                DROP ANONYMOUSLY
+                <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
+              </>
+            )}
+          </button>
+        </div>
       </form>
 
       <AnimatePresence>
@@ -211,7 +288,7 @@ export default function SendMessage() {
                   Create Your Own Board
                 </Link>
                 <button 
-                  onClick={() => { setSent(false); setContent(''); }}
+                  onClick={() => { setSent(false); setContent(''); setImages([]); }}
                   className="w-full py-4 bg-transparent border border-grid-line text-text-dim rounded-xl font-black text-[10px] uppercase tracking-widest transition-all hover:bg-white/5 active:scale-95"
                 >
                   Send Another Message
