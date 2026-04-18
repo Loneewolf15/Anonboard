@@ -9,8 +9,9 @@ export default function Landing() {
     setLoading(true);
     try {
       await signInAndCreateBoard();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert("Auth failed: " + (err.message || 'Check browser console. Tip: You may need to enable Anonymous Authentication in your Firebase Console.'));
     } finally {
       setLoading(false);
     }

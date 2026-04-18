@@ -32,25 +32,16 @@ export default function SendMessage() {
       }
       
       try {
-        // Try fetching by username first
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('username', '==', username), limit(1));
-        const querySnapshot = await getDocs(q);
-        
-        if (!querySnapshot.empty) {
-          setRecipient(querySnapshot.docs[0].data() as UserProfile);
+        // Direct UID lookup bypasses the need for complex Firestore 'list' rules
+        const docSnap = await getDoc(doc(db, 'users', username));
+        if (docSnap.exists()) {
+          setRecipient(docSnap.data() as UserProfile);
         } else {
-          // Fallback to searching by UID if username fetch didn't return anything
-          const docSnap = await getDoc(doc(db, 'users', username));
-          if (docSnap.exists()) {
-            setRecipient(docSnap.data() as UserProfile);
-          } else {
-            setError('User not found');
-          }
+          setError('User not found');
         }
       } catch (err) {
         console.error("Error fetching user:", err);
-        setError('Failed to fetch user. Ensure standard alphanumeric username or matching ID.');
+        setError('Failed to fetch user. Ensure the link is correct.');
       } finally {
         setLoading(false);
       }
