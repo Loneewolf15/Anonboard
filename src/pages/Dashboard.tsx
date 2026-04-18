@@ -224,7 +224,7 @@ export default function Dashboard({ user }: { user: User }) {
     }
   };
 
-  const shareLink = `${window.location.origin}/${user.uid}`;
+  const shareLink = `${window.location.origin}/${profile?.username || user.uid}`;
   
   const copyLink = () => {
     navigator.clipboard.writeText(shareLink);

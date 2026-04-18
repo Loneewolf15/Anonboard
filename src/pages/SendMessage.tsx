@@ -32,12 +32,21 @@ export default function SendMessage() {
       }
       
       try {
-        // Direct UID lookup bypasses the need for complex Firestore 'list' rules
-        const docSnap = await getDoc(doc(db, 'users', username));
-        if (docSnap.exists()) {
-          setRecipient(docSnap.data() as UserProfile);
+        // Now that the rules are live, we can safely query by custom username
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('username', '==', username), limit(1));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          setRecipient(querySnapshot.docs[0].data() as UserProfile);
         } else {
-          setError('User not found');
+          // Fallback to searching by UID directly if the username isn't found
+          const docSnap = await getDoc(doc(db, 'users', username));
+          if (docSnap.exists()) {
+            setRecipient(docSnap.data() as UserProfile);
+          } else {
+            setError('User not found');
+          }
         }
       } catch (err) {
         console.error("Error fetching user:", err);
