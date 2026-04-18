@@ -177,12 +177,20 @@ export default function Dashboard({ user }: { user: User }) {
   useEffect(() => {
     // Get/Create Profile
     const fetchProfile = async () => {
+      let docSnap;
       try {
         const docRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        
-        if (!docSnap.exists()) {
-          // Send ABSOLUTE bare minimum fields required by database rules
+        docSnap = await getDoc(docRef);
+      } catch (err: any) {
+        console.error("getDoc failed:", err);
+        alert("getDoc Error: " + err.message);
+        auth.signOut();
+        return;
+      }
+      
+      if (!docSnap.exists()) {
+        try {
+          const docRef = doc(db, 'users', user.uid);
           const newProfile = {
             uid: user.uid,
             displayName: user.displayName || 'Anonymous User',
@@ -190,17 +198,13 @@ export default function Dashboard({ user }: { user: User }) {
           };
           await setDoc(docRef, newProfile);
           setProfile({ ...newProfile, createdAt: Timestamp.now() } as any);
-        } else {
-          setProfile(docSnap.data() as UserProfile);
+        } catch (err: any) {
+          console.error("setDoc failed:", err);
+          alert("setDoc Error (Rules blocked creation): " + err.message);
+          auth.signOut();
         }
-      } catch (err: any) {
-        console.error("Profile initialization failed:", err);
-        if (err.message.toLowerCase().includes('permission')) {
-            alert("Database Permission Error. Your anonymous session might be invalid or corrupt. We are refreshing your session.");
-            auth.signOut();
-        } else {
-            alert("Database Error: " + err.message);
-        }
+      } else {
+        setProfile(docSnap.data() as UserProfile);
       }
     };
     

@@ -1,59 +1,27 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // --- Helpers ---
-    function isSignedIn() { return request.auth != null; }
-    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
-    
-    // Schema Validations
-    function isValidUser(data) {
-      let allowedKeys = ['uid', 'username', 'displayName', 'createdAt', 'watermark', 'watermarkFont', 'watermarkColor', 'watermarkPosition', 'avatarUrl'];
-      return data.keys().hasAll(['uid', 'displayName', 'createdAt']) &&
-             data.uid == request.auth.uid &&
-             data.displayName is string && data.displayName.size() <= 64 &&
-             data.createdAt == request.time &&
-             (!data.keys().contains('username') || (data.username is string && data.username.size() <= 32 && data.username.matches('^[a-zA-Z0-9_]+$'))) &&
-             (!data.keys().contains('watermark') || (data.watermark is string && data.watermark.size() <= 128)) &&
-             (!data.keys().contains('watermarkFont') || (data.watermarkFont is string && data.watermarkFont.size() <= 64)) &&
-             (!data.keys().contains('watermarkColor') || (data.watermarkColor is string && data.watermarkColor.size() <= 20)) &&
-             (!data.keys().contains('watermarkPosition') || (data.watermarkPosition in ['bottom', 'top', 'center'])) &&
-             (!data.keys().contains('avatarUrl') || (data.avatarUrl is string && data.avatarUrl.size() <= 512));
-    }
-
-    function isValidMessage(data, userId) {
-      return data.keys().hasAll(['content', 'createdAt', 'recipientUid', 'category']) &&
-             data.content is string && data.content.size() >= 1 && data.content.size() <= 2000 &&
-             data.createdAt == request.time &&
-             data.recipientUid == userId &&
-             data.category in ['feedback', 'question', 'compliment', 'general'] &&
-             (!data.keys().contains('reactions') || (data.reactions is map && data.reactions.size() <= 20));
-    }
-
-    // --- Collections ---
-
     match /users/{userId} {
-      allow get: if isValidId(userId); 
-      allow list: if request.query.limit == 1; // Used for unique username lookup 
+      // Anyone can look up a user to send a message
+      allow get: if true; 
+      allow list: if request.query.limit == 1; 
       
-      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().uid == userId;
-      allow update: if isOwner(userId) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['watermark', 'watermarkFont', 'watermarkColor', 'watermarkPosition', 'displayName', 'avatarUrl']) &&
-        isValidUser(incoming())
-      );
+      // Only the owner can create or update their own profile
+      allow create, update: if request.auth != null && request.auth.uid == userId;
       
       match /messages/{messageId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isValidId(messageId) && isValidMessage(incoming(), userId) && exists(/databases/$(database)/documents/users/$(userId));
-        allow update: if isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['reactions']);
-        allow delete: if isOwner(userId);
+        // Only the owner can read their messages
+        allow get, list: if request.auth != null && request.auth.uid == userId;
+        
+        // Anyone can drop a message (anonymous senders)
+        allow create: if true;
+        
+        // Only the owner can manage reactions or delete messages
+        allow update, delete: if request.auth != null && request.auth.uid == userId;
       }
     }
   }
