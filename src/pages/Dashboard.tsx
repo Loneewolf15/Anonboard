@@ -177,21 +177,26 @@ export default function Dashboard({ user }: { user: User }) {
   useEffect(() => {
     // Get/Create Profile
     const fetchProfile = async () => {
-      const docRef = doc(db, 'users', user.uid);
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        const newProfile = {
-          uid: user.uid,
-          displayName: user.displayName || 'Anonymous User',
-          username: user.uid.slice(0, 8), // Default generic username
-          watermark: '',
-          createdAt: serverTimestamp(),
-        };
-        await setDoc(docRef, newProfile);
-        setProfile({ ...newProfile, createdAt: Timestamp.now() } as any);
-      } else {
-        setProfile(docSnap.data() as UserProfile);
+      try {
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        
+        if (!docSnap.exists()) {
+          const newProfile = {
+            uid: user.uid,
+            displayName: user.displayName || 'Anonymous User',
+            username: user.uid.slice(0, 8), // Default generic username
+            watermark: '',
+            createdAt: serverTimestamp(),
+          };
+          await setDoc(docRef, newProfile);
+          setProfile({ ...newProfile, createdAt: Timestamp.now() } as any);
+        } else {
+          setProfile(docSnap.data() as UserProfile);
+        }
+      } catch (err: any) {
+        console.error("Profile initialization failed:", err);
+        alert("Database Error: " + err.message + "\n\nTip: The database rules might still be propagating globally. Try refreshing in 60 seconds.");
       }
     };
     
