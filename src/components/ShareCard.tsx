@@ -15,67 +15,28 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
   const generateCanvas = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
 
-    // Set high resolution
     const scale = 2;
-    canvas.width = 1080;
-    canvas.height = 1080;
-    ctx.scale(scale, scale);
     const w = 540;
-    const h = 540;
+    const padding = 8;
+    const totalWidth = w - 80;
+    const hasImages = !!(message.imageUrls && message.imageUrls.length > 0);
+    const imgCount = hasImages ? Math.min(message.imageUrls!.length, 3) : 0;
+    // Max image slot width per image
+    const imgW = imgCount === 1 ? totalWidth : imgCount === 2 ? (totalWidth - padding) / 2 : (totalWidth - padding * 2) / 3;
+    // Keep image height proportional — cap at 220px per slot for tall images
+    const imgH = Math.min(imgW, 220);
 
-    // Background - Solid Black
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, w, h);
-
-    // Grid Texture
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-    ctx.lineWidth = 1;
-    const gridSize = 20;
-    for (let x = 0; x < w; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-    for (let y = 0; y < h; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
-    }
-
-    // Category Badge
-    const badgeText = (message.category || 'ANON DROP').toUpperCase();
-    ctx.font = '900 10px sans-serif';
-    const textWidth = ctx.measureText(badgeText).width;
-    const badgeWidth = textWidth + 24;
-    ctx.fillStyle = '#00FF88'; // Accent color
-    ctx.beginPath();
-    ctx.roundRect(40, 40, badgeWidth, 24, 4);
-    ctx.fill();
-    ctx.fillStyle = '#000000';
-    ctx.textAlign = 'center';
-    ctx.fillText(badgeText, 40 + badgeWidth / 2, 56);
-
-    // Message Text
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 36px sans-serif';
-    ctx.textAlign = 'left';
-    
-    // Wrapped Text
+    // --- Pre-calculate text layout to know total height needed ---
+    // We need a temporary canvas to measure text
+    const tempCtx = document.createElement('canvas').getContext('2d')!;
+    tempCtx.font = '900 36px sans-serif';
     const words = message.content.split(' ');
     let line = '';
-    const lines = [];
-    const maxWidth = 460;
-    
+    const lines: string[] = [];
     for (let n = 0; n < words.length; n++) {
       const testLine = line + words[n] + ' ';
-      const metrics = ctx.measureText(testLine);
-      const testWidth = metrics.width;
-      if (testWidth > maxWidth && n > 0) {
+      if (tempCtx.measureText(testLine).width > 460 && n > 0) {
         lines.push(line);
         line = words[n] + ' ';
       } else {
@@ -84,23 +45,55 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
     }
     lines.push(line);
 
-    lines.forEach((l, i) => {
-      ctx.fillText(l.trim(), 40, 120 + i * 42);
-    });
-
     const textEndY = 120 + lines.length * 42;
+    const imageAreaY = hasImages ? textEndY + 20 : textEndY;
+    const imageZoneH = hasImages ? imgH + 20 : 0;
+    const reactionZoneH = Object.keys(message.reactions || {}).length > 0 ? 60 : 0;
+    const watermarkH = 50;
+    const requiredH = imageAreaY + imageZoneH + reactionZoneH + watermarkH;
+    const h = Math.max(540, requiredH);
+
+    // Now set canvas to the correct size
+    canvas.width = w * scale;
+    canvas.height = h * scale;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(scale, scale);
+
+    // Background
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid Texture
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.lineWidth = 1;
+    const gridSize = 20;
+    for (let x = 0; x < w; x += gridSize) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let y = 0; y < h; y += gridSize) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+
+    // Category Badge
+    const badgeText = (message.category || 'ANON DROP').toUpperCase();
+    ctx.font = '900 10px sans-serif';
+    const badgeWidth = ctx.measureText(badgeText).width + 24;
+    ctx.fillStyle = '#00FF88';
+    ctx.beginPath(); ctx.roundRect(40, 40, badgeWidth, 24, 4); ctx.fill();
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.fillText(badgeText, 40 + badgeWidth / 2, 56);
+
+    // Message Text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 36px sans-serif';
+    ctx.textAlign = 'left';
+    lines.forEach((l, i) => { ctx.fillText(l.trim(), 40, 120 + i * 42); });
 
     // Draw actual attached images in a grid on the canvas
-    if (message.imageUrls && message.imageUrls.length > 0) {
-      const urls = message.imageUrls.slice(0, 3);
-      const count = urls.length;
-      const imageAreaY = textEndY + 20;
-      const padding = 8;
-      const totalWidth = w - 80; // 40px left + 40px right margin
-      const imgW = count === 1 ? totalWidth : count === 2 ? (totalWidth - padding) / 2 : (totalWidth - padding * 2) / 3;
-      const imgH = imgW; // square thumbnails
+    if (hasImages) {
+      const urls = message.imageUrls!.slice(0, 3);
 
-      // Load all images first, then draw
       const loadedImages = await Promise.all(
         urls.map((url) => new Promise<HTMLImageElement>((resolve, reject) => {
           const img = new Image();
@@ -114,27 +107,24 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
       loadedImages.forEach((img, i) => {
         const xPos = 40 + i * (imgW + padding);
 
-        // Dark background fill for the slot (visible for non-square images)
+        // Dark background for the slot
         ctx.fillStyle = '#111111';
         ctx.beginPath();
         ctx.roundRect(xPos, imageAreaY, imgW, imgH, 8);
         ctx.fill();
 
-        // Contain-fit: show full image, no cropping
+        // Contain-fit: full image visible, no cropping
         const aspect = img.naturalWidth / img.naturalHeight;
         let drawW = imgW;
         let drawH = imgH;
         if (aspect > imgW / imgH) {
-          // image is wider than slot — fit width, letterbox top/bottom
           drawH = imgW / aspect;
         } else {
-          // image is taller than slot — fit height, letterbox left/right
           drawW = imgH * aspect;
         }
         const drawX = xPos + (imgW - drawW) / 2;
         const drawY = imageAreaY + (imgH - drawH) / 2;
 
-        // Clip to the rounded slot, then draw
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(xPos, imageAreaY, imgW, imgH, 8);
