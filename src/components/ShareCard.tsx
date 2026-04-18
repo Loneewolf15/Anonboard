@@ -113,18 +113,33 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
 
       loadedImages.forEach((img, i) => {
         const xPos = 40 + i * (imgW + padding);
-        // clip to rounded rect
+
+        // Dark background fill for the slot (visible for non-square images)
+        ctx.fillStyle = '#111111';
+        ctx.beginPath();
+        ctx.roundRect(xPos, imageAreaY, imgW, imgH, 8);
+        ctx.fill();
+
+        // Contain-fit: show full image, no cropping
+        const aspect = img.naturalWidth / img.naturalHeight;
+        let drawW = imgW;
+        let drawH = imgH;
+        if (aspect > imgW / imgH) {
+          // image is wider than slot — fit width, letterbox top/bottom
+          drawH = imgW / aspect;
+        } else {
+          // image is taller than slot — fit height, letterbox left/right
+          drawW = imgH * aspect;
+        }
+        const drawX = xPos + (imgW - drawW) / 2;
+        const drawY = imageAreaY + (imgH - drawH) / 2;
+
+        // Clip to the rounded slot, then draw
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(xPos, imageAreaY, imgW, imgH, 8);
         ctx.clip();
-
-        // cover-fit the image
-        const aspect = img.naturalWidth / img.naturalHeight;
-        let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
-        if (aspect > 1) { sw = img.naturalHeight; sx = (img.naturalWidth - sw) / 2; }
-        else { sh = img.naturalWidth; sy = (img.naturalHeight - sh) / 2; }
-        ctx.drawImage(img, sx, sy, sw, sh, xPos, imageAreaY, imgW, imgH);
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
         ctx.restore();
       });
     }
