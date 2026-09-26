@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  
+  --color-bg: #080808;
+  --color-surface: #141414;
+  --color-accent: #00FF88;
+  --color-text-main: #FFFFFF;
+  --color-text-dim: #888888;
+  --color-grid-line: rgba(255, 255, 255, 0.05);
+}
+
+@utility bg-grid {
+  background-image: 
+    linear-gradient(var(--color-grid-line) 1px, transparent 1px), 
+    linear-gradient(90deg, var(--color-grid-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+}

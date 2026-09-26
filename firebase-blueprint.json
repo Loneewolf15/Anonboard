@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and visual customization settings.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "watermark": { "type": "string" },
+        "watermarkFont": { "type": "string" },
+        "watermarkColor": { "type": "string" },
+        "watermarkPosition": { "type": "string", "enum": ["bottom", "top", "center"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "An anonymous message sent to a user.",
+      "type": "object",
+      "properties": {
+        "content": { "type": "string" },
+        "category": { "type": "string", "enum": ["feedback", "question", "compliment", "general"] },
+        "reactions": { 
+          "type": "object",
+          "description": "Reaction counts: { emoji: count }"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "recipientUid": { "type": "string" }
+      },
+      "required": ["content", "createdAt", "recipientUid", "category"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Owner profiles"
+    },
+    "/users/{userId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Anonymous messages received by the owner"
+    }
+  }
+}

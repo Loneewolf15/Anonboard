@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net — deny everything not explicitly allowed
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Schema Validators ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() <= 50 &&
+             data.createdAt == request.time &&
+             (!data.keys().hasAny(['watermark']) || (data.watermark is string && data.watermark.size() <= 100));
+    }
+
+    function isValidMessage(data, userId) {
+      return data.keys().hasAll(['content', 'createdAt', 'recipientUid']) &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 1000 &&
+             data.createdAt == request.time &&
+             data.recipientUid == userId &&
+             (!data.keys().hasAny(['category']) || (data.category is string && data.category.size() <= 50)) &&
+             (!data.keys().hasAny(['reactions']) || (data.reactions is map && data.reactions.size() <= 10)) &&
+             (!data.keys().hasAny(['imageUrls']) || (data.imageUrls is list && data.imageUrls.size() <= 3)) &&
+             (!data.keys().hasAny(['videoUrls']) || (data.videoUrls is list && data.videoUrls.size() <= 1)) &&
+             (!data.keys().hasAny(['audioUrl']) || data.audioUrl is string) &&
+             (!data.keys().hasAny(['expiresAt']) || data.expiresAt is timestamp);
+    }
+
+    // --- Collections ---
+
+    match /users/{userId} {
+      // Public can look up a profile to send a message
+      allow get: if isValidId(userId);
+      // No directory scraping — ever
+      allow list: if false;
+
+      // Only the owner can create their own profile
+      allow create: if isOwner(userId) && isValidUser(incoming());
+
+      // Owner can update via three valid write shapes only
+      allow update: if isOwner(userId) && (
+        // 1. Profile editor: displayName + username + avatarUrl (any subset)
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'username', 'avatarUrl']) ||
+
+        // 2. Watermark settings panel: all 4 watermark fields in one write
+        (incoming().diff(existing()).affectedKeys().hasOnly(['watermark', 'watermarkFont', 'watermarkColor', 'watermarkPosition']) &&
+         incoming().watermark is string && incoming().watermark.size() <= 100) ||
+
+        // 3. Single display name update only
+        (incoming().diff(existing()).affectedKeys().hasOnly(['displayName']) &&
+         incoming().displayName is string && incoming().displayName.size() <= 50)
+      );
+
+      match /messages/{messageId} {
+        // Only the recipient can read their own messages
+        allow get, list: if isOwner(userId);
+
+        // Anyone can drop a message to a valid recipient
+        allow create: if isValidId(messageId) &&
+                         isValidMessage(incoming(), userId) &&
+                         exists(/databases/$(database)/documents/users/$(userId));
+
+        // Only owner can update — reactions map only
+        allow update: if isOwner(userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['reactions']) &&
+                         incoming().reactions is map &&
+                         incoming().reactions.size() <= 10;
+
+        // Only owner can delete
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
