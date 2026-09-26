@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Message, UserProfile } from '../types';
-import { Download, Copy, Check, Ghost } from 'lucide-react';
+import { Download, Copy, Check, Ghost, Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ShareCardProps {
@@ -203,6 +203,30 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
     }
   };
 
+  /** Share the PNG card via Web Share API (mobile = native sheet, desktop = download) */
+  const handleNativeShare = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], `anonboard-drop-${message.id}.png`, { type: 'image/png' });
+      try {
+        if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: '\u{1F47B} Anonymous Drop',
+            text:  'Someone sent me an anonymous message on Anonboard',
+          });
+        } else {
+          // Desktop: just download
+          handleDownload();
+        }
+      } catch (err) {
+        if ((err as any)?.name !== 'AbortError') console.error('Share failed', err);
+      }
+    }, 'image/png');
+  };
+
   return (
     <div className="flex flex-col items-center gap-6 p-4 bg-neutral-900 rounded-3xl border border-white/10 max-w-lg w-full">
       <div className="relative aspect-square w-full rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
@@ -213,15 +237,24 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
       </div>
       
       <div className="flex gap-3 w-full">
+        {/* Native share — opens WhatsApp / social share sheet on mobile */}
         <button
-          onClick={handleCopy}
+          onClick={handleNativeShare}
           className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-white text-black rounded-xl font-medium transition-transform active:scale-95 hover:bg-neutral-200"
         >
+          <Share2 className="w-4 h-4" />
+          Share to WhatsApp
+        </button>
+        <button
+          onClick={handleCopy}
+          title="Copy image"
+          className="flex items-center justify-center p-3 bg-neutral-800 text-white rounded-xl transition-transform active:scale-95 hover:bg-neutral-700"
+        >
           {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          {copied ? 'Copied!' : 'Copy Image'}
         </button>
         <button
           onClick={handleDownload}
+          title="Download PNG"
           className="flex items-center justify-center p-3 bg-neutral-800 text-white rounded-xl transition-transform active:scale-95 hover:bg-neutral-700"
         >
           <Download className="w-5 h-5" />

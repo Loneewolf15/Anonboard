@@ -390,6 +390,7 @@ export default function Dashboard({ user }: { user: User }) {
               <MessageCard
                 key={msg.id}
                 message={msg}
+                profile={profile ?? undefined}
                 onShare={setSharingMessage}
                 onDelete={handleDelete}
               />
