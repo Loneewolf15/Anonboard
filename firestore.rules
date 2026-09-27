@@ -42,8 +42,8 @@ service cloud.firestore {
     match /users/{userId} {
       // Public can look up a profile to send a message
       allow get: if isValidId(userId);
-      // No directory scraping — ever
-      allow list: if false;
+      // We must allow list so the frontend can query by `username`
+      allow list: if true;
 
       // Only the owner can create their own profile
       allow create: if isOwner(userId) && isValidUser(incoming());
