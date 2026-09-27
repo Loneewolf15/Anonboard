@@ -80,6 +80,7 @@ function drawFrame(
   frameIndex: number,
   totalFrames: number,
   avatar: HTMLImageElement | null,
+  dateStr: string,
 ) {
   const W = WIDTH, H = HEIGHT, cx = W / 2;
 
@@ -254,6 +255,14 @@ function drawFrame(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(wm, cx, H - 80);
+
+  // Timestamp
+  if (dateStr) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.font = '800 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(dateStr, cx, H - 40);
+  }
 }
 
 // ─── Core generation function ─────────────────────────────────────────────────
@@ -262,11 +271,12 @@ export interface GenerateMP4Options {
   audioUrl: string;
   profile: UserProfile;
   messageId: string;
+  dateStr?: string;
   onProgress?: (p: number) => void; // 0 → 1
 }
 
 export async function generateAudioVideoMP4(opts: GenerateMP4Options): Promise<Blob> {
-  const { audioUrl, profile, messageId, onProgress } = opts;
+  const { audioUrl, profile, messageId, dateStr = '', onProgress } = opts;
   const prog = (p: number) => onProgress?.(p);
 
   // ── Guard: WebCodecs required ──────────────────────────────────────────────
@@ -357,9 +367,7 @@ export async function generateAudioVideoMP4(opts: GenerateMP4Options): Promise<B
   // ── 9. Encode video frames (render canvas → VideoFrame → encoder) ─────────
   for (let i = 0; i < totalFrames; i++) {
     if (vidErr) throw vidErr;
-
-    drawFrame(ctx, profile, frameBars[i], i, totalFrames, avatar);
-
+    drawFrame(ctx, profile, frameBars[i], i, totalFrames, avatar, dateStr);
     const timestamp = Math.round((i / FPS) * 1_000_000);        // µs
     const duration  = Math.round(1_000_000 / FPS);              // µs
     const frame = new VideoFrame(canvas, { timestamp, duration });
@@ -439,10 +447,15 @@ export default function AudioVideoExporter({ message, profile }: AudioVideoExpor
     setErrMsg('');
 
     try {
+      const dateStr = message.createdAt 
+        ? message.createdAt.toDate().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+        : '';
+
       const blob = await generateAudioVideoMP4({
         audioUrl:   message.audioUrl,
         profile,
         messageId:  message.id,
+        dateStr,
         onProgress: setProgress,
       });
 

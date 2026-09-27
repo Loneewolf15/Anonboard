@@ -170,6 +170,15 @@ export default function ShareCard({ message, profile }: ShareCardProps) {
     if (wmPos === 'center') yPos = h / 2 + (lines.length * 42) / 2 + 80;
 
     ctx.fillText(watermarkText, w / 2, yPos);
+
+    // Timestamp
+    if (message.createdAt) {
+      const dateStr = message.createdAt.toDate().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.font = '800 10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(dateStr, w - 40, h - 30);
+    }
   };
 
   useEffect(() => {
