@@ -21,10 +21,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Stub secret configs for TS lint
-        run: |
-          echo "{}" > firebase-applet-config.json
-          echo "{}" > cloudinary-config.json
-
       - name: Type-check (tsc --noEmit)
         run: npm run lint
