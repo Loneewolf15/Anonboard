@@ -16,7 +16,7 @@ const CLOUDINARY_CLOUD  = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME  || '';
 const CLOUDINARY_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '';
 const CLOUDINARY_URL    = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`;
 
-const MAX_VIDEO_MB  = 50;
+const MAX_VIDEO_MB  = 30;
 const MAX_RECORD_SEC = 60;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
