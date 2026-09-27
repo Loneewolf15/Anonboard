@@ -403,7 +403,6 @@ export default function SendMessage() {
             placeholder="TYPE YOUR MESSAGE…"
             className="w-full h-48 sm:h-56 bg-surface border border-grid-line rounded-2xl p-6 sm:p-10 text-xl sm:text-2xl font-bold text-white placeholder:text-white/5 focus:outline-none focus:border-accent transition-all resize-none shadow-2xl"
             maxLength={1000}
-            required
           />
           <div className="absolute bottom-4 right-6 text-[9px] font-black tracking-[0.2em] text-text-dim uppercase">
             {content.length}/1000
