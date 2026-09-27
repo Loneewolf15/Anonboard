@@ -95,6 +95,7 @@ export default function SendMessage() {
   const [audioBlob,    setAudioBlob]    = useState<Blob | null>(null);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState('');
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [voiceMask, setVoiceMask] = useState(false);
 
   const mediaRecRef  = useRef<MediaRecorder | null>(null);
   const chunksRef    = useRef<BlobPart[]>([]);
@@ -170,7 +171,42 @@ export default function SendMessage() {
     try {
       const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = getMicMimeType();
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      
+      let targetStream = stream;
+      if (voiceMask) {
+        const audioCtx = new window.AudioContext();
+        const source = audioCtx.createMediaStreamSource(stream);
+        
+        // Ring modulation for "Dalek / Hacker" effect
+        const vca = audioCtx.createGain();
+        vca.gain.value = 0;
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = 50; // Robotic pitch
+        osc.start();
+        osc.connect(vca.gain);
+        source.connect(vca);
+        
+        // Lowpass filter for "radio/comms" muffle
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 1800; 
+        vca.connect(filter);
+        
+        // Mix a tiny bit of dry signal so it's intelligible
+        const dryGain = audioCtx.createGain();
+        dryGain.gain.value = 0.4;
+        source.connect(dryGain);
+        dryGain.connect(filter);
+        
+        const dest = audioCtx.createMediaStreamDestination();
+        filter.connect(dest);
+        
+        targetStream = dest.stream;
+        (mediaRecRef as any).audioCtx = audioCtx;
+      }
+
+      const recorder = new MediaRecorder(targetStream, mimeType ? { mimeType } : undefined);
       chunksRef.current = [];
       recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
@@ -179,6 +215,10 @@ export default function SendMessage() {
         if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
         setAudioPreviewUrl(URL.createObjectURL(blob));
         stream.getTracks().forEach(t => t.stop());
+        if ((mediaRecRef as any).audioCtx) {
+          (mediaRecRef as any).audioCtx.close();
+          (mediaRecRef as any).audioCtx = null;
+        }
       };
       recorder.start(100); // collect data every 100ms
       mediaRecRef.current = recorder;
@@ -497,6 +537,20 @@ export default function SendMessage() {
                 onChange={handleVideoChange} disabled={loading} />
               <Video className="w-5 h-5" />
             </label>
+          ) : null}
+
+          {/* Voice Mask */}
+          {mediaMode === 'none' ? (
+             <button
+               type="button"
+               onClick={() => setVoiceMask(!voiceMask)}
+               className={`w-14 shrink-0 flex items-center justify-center border rounded-xl transition-all ${
+                  voiceMask ? 'bg-accent/10 border-accent/50 text-accent shadow-[0_0_10px_rgba(0,255,136,0.2)]' : 'bg-surface border-grid-line text-text-dim hover:text-white hover:border-white/20'
+               }`}
+               title="Toggle Anonymous Voice Mask"
+             >
+               <Ghost className="w-5 h-5" />
+             </button>
           ) : null}
 
           {/* Mic */}
