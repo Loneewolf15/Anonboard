@@ -95,7 +95,6 @@ export default function SendMessage() {
   const [audioBlob,    setAudioBlob]    = useState<Blob | null>(null);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState('');
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
-  const [voiceMask, setVoiceMask] = useState(false);
 
   const mediaRecRef  = useRef<MediaRecorder | null>(null);
   const chunksRef    = useRef<BlobPart[]>([]);
@@ -172,39 +171,36 @@ export default function SendMessage() {
       const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = getMicMimeType();
       
-      let targetStream = stream;
-      if (voiceMask) {
-        const audioCtx = new window.AudioContext();
-        const source = audioCtx.createMediaStreamSource(stream);
-        
-        // Ring modulation for "Dalek / Hacker" effect
-        const vca = audioCtx.createGain();
-        vca.gain.value = 0;
-        const osc = audioCtx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.value = 50; // Robotic pitch
-        osc.start();
-        osc.connect(vca.gain);
-        source.connect(vca);
-        
-        // Lowpass filter for "radio/comms" muffle
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.value = 1800; 
-        vca.connect(filter);
-        
-        // Mix a tiny bit of dry signal so it's intelligible
-        const dryGain = audioCtx.createGain();
-        dryGain.gain.value = 0.4;
-        source.connect(dryGain);
-        dryGain.connect(filter);
-        
-        const dest = audioCtx.createMediaStreamDestination();
-        filter.connect(dest);
-        
-        targetStream = dest.stream;
-        (mediaRecRef as any).audioCtx = audioCtx;
-      }
+      const audioCtx = new window.AudioContext();
+      const source = audioCtx.createMediaStreamSource(stream);
+      
+      // Ring modulation for "Dalek / Hacker" effect
+      const vca = audioCtx.createGain();
+      vca.gain.value = 0;
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = 50; // Robotic pitch
+      osc.start();
+      osc.connect(vca.gain);
+      source.connect(vca);
+      
+      // Lowpass filter for "radio/comms" muffle
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 1800; 
+      vca.connect(filter);
+      
+      // Mix a tiny bit of dry signal so it's intelligible
+      const dryGain = audioCtx.createGain();
+      dryGain.gain.value = 0.4;
+      source.connect(dryGain);
+      dryGain.connect(filter);
+      
+      const dest = audioCtx.createMediaStreamDestination();
+      filter.connect(dest);
+      
+      const targetStream = dest.stream;
+      (mediaRecRef as any).audioCtx = audioCtx;
 
       const recorder = new MediaRecorder(targetStream, mimeType ? { mimeType } : undefined);
       chunksRef.current = [];
@@ -272,7 +268,8 @@ export default function SendMessage() {
   // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || !recipient) return;
+    const hasMedia = (mediaMode === 'images' && images.length > 0) || (mediaMode === 'video' && videoFile) || (mediaMode === 'audio' && audioBlob);
+    if ((!content.trim() && !hasMedia) || !recipient) return;
     setLoading(true);
     setSubmitError('');
     try {
@@ -295,9 +292,16 @@ export default function SendMessage() {
         audioUrl = await uploadToCloudinary(audioBlob, recipient.uid, 'audio');
       }
 
+      let finalContent = content.trim();
+      if (!finalContent) {
+        if (mediaMode === 'audio') finalContent = '🎙️ Voice Drop';
+        else if (mediaMode === 'video') finalContent = '🎥 Video Drop';
+        else if (mediaMode === 'images') finalContent = '📷 Image Drop';
+      }
+
       setUploadProgress('Sending drop…');
       await addDoc(collection(db, 'users', recipient.uid, 'messages'), {
-        content: content.trim(),
+        content: finalContent,
         recipientUid: recipient.uid,
         category,
         ...(imageUrls.length > 0 && { imageUrls }),
@@ -539,20 +543,6 @@ export default function SendMessage() {
             </label>
           ) : null}
 
-          {/* Voice Mask */}
-          {mediaMode === 'none' ? (
-             <button
-               type="button"
-               onClick={() => setVoiceMask(!voiceMask)}
-               className={`w-14 shrink-0 flex items-center justify-center border rounded-xl transition-all ${
-                  voiceMask ? 'bg-accent/10 border-accent/50 text-accent shadow-[0_0_10px_rgba(0,255,136,0.2)]' : 'bg-surface border-grid-line text-text-dim hover:text-white hover:border-white/20'
-               }`}
-               title="Toggle Anonymous Voice Mask"
-             >
-               <Ghost className="w-5 h-5" />
-             </button>
-          ) : null}
-
           {/* Mic */}
           {mediaMode === 'none' ? (
             <button
@@ -560,6 +550,7 @@ export default function SendMessage() {
               onClick={startRecording}
               disabled={loading}
               className="w-14 shrink-0 flex items-center justify-center border bg-surface border-grid-line text-text-dim rounded-xl hover:text-white hover:border-white/20 transition-all disabled:opacity-30"
+              title="Record Anonymous Voice Drop (Voice Mask Active)"
             >
               <Mic className="w-5 h-5" />
             </button>
@@ -568,7 +559,7 @@ export default function SendMessage() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading || !content.trim()}
+            disabled={loading || (!content.trim() && images.length === 0 && !videoFile && !audioBlob)}
             className="flex-1 flex items-center justify-center gap-3 py-4 sm:py-6 bg-accent text-black rounded-xl font-black text-lg sm:text-2xl uppercase italic tracking-tighter transition-all active:scale-95 disabled:opacity-50 hover:shadow-[0_0_20px_rgba(0,255,136,0.2)]"
           >
             {loading
